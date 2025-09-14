@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Keyboard Master</title>
+<style>
+body {margin:0;font-family:"Comic Sans MS",cursive,sans-serif;background:linear-gradient(135deg,#f5f5f5,#e0e0e0);display:flex;flex-direction:column;align-items:center;padding:20px;color:#000;}
+h1{text-align:center;margin:10px 0;color:#333;}
+.top-panel{display:flex;align-items:center;gap:15px;margin-bottom:15px;}
+#startBtn,#restartBtn,#musicBtn,#playAgainBtn{font-size:18px;padding:8px 16px;cursor:pointer;border:none;border-radius:6px;background:#4caf50;color:#fff;transition:0.2s;}
+#startBtn:hover,#restartBtn:hover,#musicBtn:hover,#playAgainBtn:hover{opacity:0.85;}
+#questionHintPanel{display:flex;gap:20px;margin-bottom:10px;flex-wrap:wrap;justify-content:center;}
+#targetKeyBox,#hintBox{padding:15px 20px;border-radius:12px;font-weight:bold;min-width:220px;text-align:center;color:#fff;}
+#targetKeyBox{background:linear-gradient(90deg,#ff6a00,#ee0979);font-size:24px;}
+#hintBox{background:linear-gradient(90deg,#36d1dc,#5b86e5);font-size:18px;}
+#scoreBoard{font-size:18px;margin-bottom:10px;display:none;}
+#report{margin-bottom:20px;font-size:18px;display:none;text-align:center;width:90%;background:#fff;color:#000;padding:20px;border-radius:12px;box-shadow:0 0 15px #ffea70;}
+.keyboard-row{display:flex;justify-content:center;margin-bottom:5px;}
+.key{width:55px;height:55px;margin:3px;display:flex;align-items:center;justify-content:center;background:#fff;border:1px solid #999;border-radius:6px;font-weight:bold;position:relative;user-select:none;transition:0.2s;text-align:center;}
+.key .main-label{font-size:20px;font-weight:bold;color:#000;}
+.key .top-right{position:absolute;right:5px;top:2px;font-size:14px;color:#333;font-weight:bold;}
+.key.enter{width:80px;}
+.key.shift{width:75px;}
+.key.space{width:250px;}
+.key.backspace{width:75px;}
+.key.target{background-color:#ffeb3b;color:#000;}
+.key.correct{background-color:#4caf50;color:#fff;}
+.key.wrong{background-color:#f44336;color:#fff;}
+.key.active{transform:scale(1.1);box-shadow:0 0 12px #ff9800;}
+.medal{width:100px;height:100px;border-radius:50%;margin:20px auto;display:flex;align-items:center;justify-content:center;font-size:32px;font-weight:bold;box-shadow:0 0 25px rgba(0,0,0,0.4);animation:shine 2s infinite alternate;}
+.gold{background:radial-gradient(circle,gold,goldenrod);color:#000;}
+.silver{background:radial-gradient(circle,silver,gray);color:#000;}
+.bronze{background:radial-gradient(circle,#cd7f32,#8b4513);color:#000;}
+@keyframes shine{from{transform:scale(1);box-shadow:0 0 10px #fff;}to{transform:scale(1.1);box-shadow:0 0 25px #ffea70;}}
+</style>
+</head>
+<body>
+
+<h1>Keyboard Master 🚀</h1>
+
+<div id="report"></div>
+
+<div class="top-panel">
+  <button id="startBtn">Start</button>
+  <button id="restartBtn" style="display:none;">Restart</button>
+  <button id="musicBtn">🎵</button>
+</div>
+
+<div id="questionHintPanel">
+  <div id="targetKeyBox">Question</div>
+  <div id="hintBox">Hint</div>
+</div>
+
+<div id="scoreBoard">Round: 1/10 | Correct:0 | Wrong:0</div>
+<div id="keyboard"></div>
+
+<!-- Sounds -->
+<audio id="bgMusic" loop>
+  <source src="https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3" type="audio/mpeg">
+</audio>
+<audio id="correctSound"><source src="https://www.soundjay.com/buttons/sounds/button-4.mp3" type="audio/mpeg"></audio>
+<audio id="wrongSound"><source src="https://www.soundjay.com/buttons/sounds/button-10.mp3" type="audio/mpeg"></audio>
+<audio id="medalSound"><source src="https://www.soundjay.com/human/sounds/applause-2.mp3" type="audio/mpeg"></audio>
+
+<script>
+// --- BUILD KEYBOARD ---
+const keyboardLayout=[
+  ["1/!", "2/@", "3/#", "4/$", "5/%", "6/^", "7/&", "8/*", "9/(", "0/)", "-/_", "=/+", "<--"],
+  ["Q","W","E","R","T","Y","U","I","O","P","[/{", "] / }", "\\"],
+  ["A","S","D","F","G","H","J","K","L",";/:","'","Enter"],
+  ["Left Shift","Z","X","C","V","B","N","M",",/<","./>","/","Right Shift"],
+  ["Left Ctrl","Left Alt","Space","Right Alt","Right Ctrl"]
+];
+const keyMap={};
+const keyboardDiv=document.getElementById('keyboard');
+keyboardLayout.forEach(row=>{
+  const rowDiv=document.createElement('div'); rowDiv.className='keyboard-row';
+  row.forEach(label=>{
+    const keyDiv=document.createElement('div'); keyDiv.className='key';
+    if(label.toLowerCase().includes("enter")) keyDiv.classList.add("enter");
+    if(label.toLowerCase().includes("shift")) keyDiv.classList.add("shift");
+    if(label.toLowerCase().includes("space")) keyDiv.classList.add("space");
+    if(label.includes("<--")) keyDiv.classList.add("backspace");
+    if(label.includes("/")){
+      const [num,sym]=label.split("/");
+      keyDiv.innerHTML=`<span class="main-label">${num}</span><span class="top-right">${sym}</span>`;
+      keyMap[num.toLowerCase()]=keyDiv; 
+      keyMap[sym]=keyDiv;
+    } else { keyDiv.innerHTML=`<span class="main-label">${label}</span>`; keyMap[label.toLowerCase()]=keyDiv; }
+    rowDiv.appendChild(keyDiv);
+  });
+  keyboardDiv.appendChild(rowDiv);
+});
+
+// --- COMBOS & MEANINGS ---
+const combos=[
+  ["left shift","!"], ["left shift","@"], ["right shift","#"], ["left shift","$"], ["left shift","%"], ["left shift","^"], ["left shift","&"], ["left shift","*"],
+  ["left ctrl","c"], ["left ctrl","v"], ["left ctrl","x"], ["left ctrl","z"], ["left ctrl","y"], ["left ctrl","s"], ["left ctrl","o"], ["left ctrl","p"], ["left ctrl","a"], ["left ctrl","f"],
+  ["space"], ["enter"], ["left shift","a"], ["left shift","z"]
+];
+const comboMeanings={
+  "left ctrl+c":"Copy 📋","left ctrl+v":"Paste 📥","left ctrl+x":"Cut ✂️",
+  "left ctrl+z":"Undo ↩️","left ctrl+y":"Redo 🔁","left ctrl+s":"Save 💾",
+  "left ctrl+o":"Open 📂","left ctrl+p":"Print 🖨️","left ctrl+a":"Select All 🔎","left ctrl+f":"Find 🔍",
+  "space":"Space Key","enter":"Enter Key",
+  "left shift+a":"Capital A","left shift+z":"Capital Z","left shift+!":"Exclamation !",
+  "left shift+@":"At @","left shift+$":"Dollar $","left shift+%":"Percent %",
+  "left shift+^":"Caret ^","left shift+&":"Ampersand &","left shift+*":"Asterisk *",
+  "right shift+#":"Hash #"
+};
+
+// --- STATE ---
+let round=1,totalRounds=10,correct=0,wrong=0;
+let keysPressed=new Set(),attempts=[],currentCombo,gameStarted=false,playerName="Player";
+let playerNamePrompted=false;
+
+// --- ELEMENTS ---
+const targetKeyBox=document.getElementById('targetKeyBox');
+const hintBox=document.getElementById('hintBox');
+const scoreBoard=document.getElementById('scoreBoard');
+const reportDiv=document.getElementById('report');
+const startBtn=document.getElementById('startBtn');
+const restartBtn=document.getElementById('restartBtn');
+const musicBtn=document.getElementById('musicBtn');
+const bgMusic=document.getElementById('bgMusic');
+const correctSound=document.getElementById('correctSound');
+const wrongSound=document.getElementById('wrongSound');
+const medalSound=document.getElementById('medalSound');
+let musicPlaying=false;
+
+// --- MUSIC ---
+musicBtn.addEventListener('click',()=>{
+  if(musicPlaying){ bgMusic.pause(); musicBtn.textContent="🔇"; } 
+  else{ bgMusic.play(); musicBtn.textContent="🎵"; }
+  musicPlaying=!musicPlaying;
+});
+
+// --- ASK NAME ---
+function askName(){ 
+    if(!playerNamePrompted){ 
+        let name=prompt("Enter your name:","Player"); 
+        if(name) playerName=name; 
+        playerNamePrompted=true; 
+    } 
+}
+
+// --- START/RESTART ---
+function startGame(){ 
+  askName(); 
+  startBtn.style.display='none'; restartBtn.style.display='inline-block';
+  targetKeyBox.style.display='block'; hintBox.style.display='block'; scoreBoard.style.display='block';
+  reportDiv.style.display='none'; nextRoundInit(); gameStarted=true; 
+}
+startBtn.addEventListener('click',startGame);
+
+function resetGame(){
+  round=1; correct=0; wrong=0; attempts=[]; keysPressed.clear(); gameStarted=true;
+  reportDiv.style.display='none';
+  targetKeyBox.style.display='block'; hintBox.style.display='block'; scoreBoard.style.display='block';
+  Object.values(keyMap).forEach(k=>k.classList.remove('target','correct','wrong','active'));
+  nextRoundInit();
+}
+restartBtn.addEventListener('click',resetGame);
+
+// --- HINT TEXT ---
+function getHintText(combo){
+    let keyString=combo.map(k=>k.toLowerCase()).join("+");
+    let meaning=comboMeanings[keyString]||"";
+    let holdText=combo.map(k=>{
+        if(k.includes("shift") || k.includes("ctrl") || k.includes("alt")) return "Hold " + k.toUpperCase();
+        return k.toUpperCase();
+    }).join(" + ");
+    if(meaning) return `${holdText} → ${meaning}`;
+    return holdText;
+}
+
+// --- ROUND LOGIC ---
+function highlightTarget(){
+    Object.values(keyMap).forEach(k=>k.classList.remove('target','correct','wrong'));
+    currentCombo.forEach(k=>{ if(keyMap[k]) keyMap[k].classList.add('target'); });
+    targetKeyBox.textContent="Question: "+currentCombo.map(k=>k.toUpperCase()).join(" + ");
+    hintBox.textContent="Hint: "+getHintText(currentCombo);
+}
+function updateScore(){ scoreBoard.textContent=`Round: ${round}/${totalRounds} | Correct: ${correct} | Wrong: ${wrong}`; }
+function nextRoundInit(){ currentCombo=combos[Math.floor(Math.random()*combos.length)]; keysPressed.clear(); highlightTarget(); updateScore(); }
+function nextRound(){ if(round>=totalRounds){ showReport(); } else{ round++; nextRoundInit(); } }
+
+// --- KEYPRESS LOGIC ---
+document.addEventListener('keydown', e => {
+    if (!gameStarted) return;
+
+    let key = e.key;
+
+    // Map special keys
+    if(key === " ") key="space";
+    if(e.code==="ShiftLeft") key="left shift";
+    if(e.code==="ShiftRight") key="right shift";
+    if(e.code==="ControlLeft") key="left ctrl";
+    if(e.code==="ControlRight") key="right ctrl";
+    if(e.code==="AltLeft") key="left alt";
+    if(e.code==="AltRight") key="right alt";
+    if(e.code==="Enter") key="enter";
+    if(e.code==="Backspace") key="<--";
+
+    if(key.length===1 && /[a-zA-Z]/.test(key)) key=key.toLowerCase();
+
+    if(e.ctrlKey || e.altKey || e.key===" " || key.includes("shift")) e.preventDefault();
+
+    keysPressed.add(key);
+    if(keyMap[key]) keyMap[key].classList.add('active');
+
+    let allCorrect=true;
+    currentCombo.forEach(k=>{
+        if(keysPressed.has(k) && keyMap[k]) keyMap[k].classList.add('correct');
+        else allCorrect=false;
+    });
+
+    if(allCorrect){
+        correct++; attempts.push({combo:currentCombo,correct:true});
+        correctSound.currentTime=0; correctSound.play();
+        setTimeout(nextRound,400);
+    } else if(!currentCombo.includes(key)){
+        currentCombo.forEach(k=>{ if(keyMap[k]) keyMap[k].classList.add('wrong'); });
+        wrong++; attempts.push({combo:currentCombo,correct:false});
+        wrongSound.currentTime=0; wrongSound.play();
+        setTimeout(nextRound,400);
+    }
+    updateScore();
+});
+
+document.addEventListener('keyup', e => {
+    let key = e.key;
+    if(key === " ") key="space";
+    if(e.code==="ShiftLeft") key="left shift";
+    if(e.code==="ShiftRight") key="right shift";
+    if(e.code==="ControlLeft") key="left ctrl";
+    if(e.code==="ControlRight") key="right ctrl";
+    if(e.code==="AltLeft") key="left alt";
+    if(e.code==="AltRight") key="right alt";
+    if(e.code==="Enter") key="enter";
+    if(e.code==="Backspace") key="<--";
+    if(key.length===1 && /[a-zA-Z]/.test(key)) key=key.toLowerCase();
+
+    keysPressed.delete(key);
+    if(keyMap[key]) keyMap[key].classList.remove('active');
+});
+
+// --- REPORT ---
+function showReport(){
+  gameStarted=false;
+  targetKeyBox.textContent="Practice Completed!";
+  reportDiv.style.display='block';
+  reportDiv.scrollIntoView({behavior:'smooth',block:'start'});
+
+  let accuracy=((correct/(correct+wrong))*100).toFixed(1);
+  let medalClass="bronze",medalText="🥉";
+  if(accuracy>=80){ medalClass="gold"; medalText="🥇"; } 
+  else if(accuracy>=50){ medalClass="silver"; medalText="🥈"; }
+
+  let insights="";
+  if(wrong>correct) insights="Needs more focus on combos. Practice daily!";
+  else if(correct>wrong) insights="Doing well! Keep improving shortcut combos.";
+  else insights="Balanced, but can improve further with practice.";
+
+  let html=`<h2 style="color:#333;">${playerName}'s Report</h2>`;
+  html+=`<p><b>Total Rounds:</b> ${totalRounds}</p>`;
+  html+=`<p><b>Correct:</b> ${correct} | <b>Wrong:</b> ${wrong} | <b>Accuracy:</b> ${accuracy}%</p>`;
+  html+=`<div class="medal ${medalClass}">${medalText}</div>`;
+  html+=`<h3 style="color:#006400;">Insights:</h3><p>${insights}</p>`;
+  html+=`<table border="1" cellpadding="5" cellspacing="0" style="background:#f0f0f0;color:#000;width:100%;margin-top:10px;">
+  <tr style="background:#ffea70;"><th>Round</th><th>Combo</th><th>Meaning</th><th>Correct?</th></tr>`;
+  attempts.forEach((a,i)=>{
+    const keyString=a.combo.map(k=>k.toLowerCase()).join("+");
+    const meaning=comboMeanings[keyString]||"";
+    html+=`<tr><td>${i+1}</td><td>${a.combo.map(k=>k.toUpperCase()).join(" + ")}</td><td>${meaning}</td><td>${a.correct?"✅ Yes":"❌ No"}</td></tr>`;
+  });
+  html+=`</table><button id="playAgainBtn">Play Again</button>`;
+  reportDiv.innerHTML=html;
+  document.getElementById('playAgainBtn').addEventListener('click',resetGame);
+  medalSound.currentTime=0; medalSound.play();
+}
+</script>
+</body>
+</html>
+
+
+
